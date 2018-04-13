@@ -8,7 +8,7 @@ import subprocess
 
 force_static_packages = os.environ.get('PKG_CONFIG_FORCE_STATIC', '').split(' ')
 
-pkg_config, args = sys.argv[0], sys.argv[1:]
+args = sys.argv[1:]
 options = []
 packages = []
 for i, arg in enumerate(args):
@@ -22,7 +22,6 @@ for i, arg in enumerate(args):
     break
 
 def pattern_match(packages):
-    global force_static_packages
     return [ pattern for pattern in force_static_packages if fnmatch.filter(packages, pattern) ]
 
 if '--libs' in options and pattern_match(packages):
