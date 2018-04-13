@@ -1,0 +1,83 @@
+#! /usr/bin/env python3
+
+import os
+import sys
+import argparse
+import fnmatch
+import subprocess
+
+force_static_packages = os.environ.get('PKG_CONFIG_FORCE_STATIC', '').split(' ')
+
+pkg_config, args = sys.argv[0], sys.argv[1:]
+options = []
+packages = []
+for i, arg in enumerate(args):
+    if arg == '--':
+        packages = args[i+1:]
+        break
+    if arg.startswith('-'):
+        options.append(arg)
+        continue
+    packages = args[i:]
+    break
+
+def pattern_match(packages):
+    global force_static_packages
+    return [ pattern for pattern in force_static_packages if fnmatch.filter(packages, pattern) ]
+
+if '--libs' in options and pattern_match(packages):
+    pass
+else:
+    os.execv("/usr/bin/pkg-config", ["pkg-config"] + args)
+    exit(1)
+
+custom_path = []
+system_path = ["/usr/lib64", "/lib64"]
+
+all_tokens = []
+
+for package in packages:
+    new_options = list(options)
+    statify = False
+    if pattern_match([package]):
+        statify = True
+        if "--static" not in new_options:
+            new_options.insert(0, "--static")
+
+    tokens = subprocess.run(["/usr/bin/pkg-config"] + new_options + ["--", package],
+        check=True, stdout=subprocess.PIPE).stdout.decode('ascii').strip().split(' ')
+
+    for token in tokens:
+        if token.startswith("-L"):
+            path = token[len("-L"):].strip()
+            custom_path.append(path)
+
+    all_tokens.append( (package, statify, tokens) )
+
+output = []
+for package, statify, tokens in all_tokens:
+    require_static_lib = True
+
+    for token in tokens:
+        if statify and token.startswith("-l"):
+            name = token[len("-l"):].strip()
+            static_name = "lib{}.a".format(name)
+            found_static_lib = False
+
+            for path in custom_path + system_path:
+                if os.path.exists(os.path.join(path, static_name)):
+                    token = "-l:{}".format(static_name)
+                    found_static_lib = True
+                    break
+
+            if require_static_lib and not found_static_lib:
+                raise Exception("Package '{}' has matched pattern '{}', but required static version of '{}' was not found. Searched for '{}' in {}".format(
+                    package, pattern_match([package])[0], token, static_name, custom_path + system_path))
+
+            # We do not enforce dependant static libraries to exist, but convert them to static if found
+            require_static_lib = False
+
+        output.append(token)
+
+print(' '.join(output))
+
