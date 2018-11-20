@@ -1,4 +1,6 @@
-#! /usr/bin/env python3
+#! /usr/bin/env python
+
+from __future__ import print_function
 
 import os
 import sys
@@ -43,8 +45,7 @@ for package in packages:
         if "--static" not in new_options:
             new_options.insert(0, "--static")
 
-    tokens = subprocess.run(["/usr/bin/pkg-config"] + new_options + ["--", package],
-        check=True, stdout=subprocess.PIPE).stdout.decode('ascii').strip().split(' ')
+    tokens = subprocess.check_output(["/usr/bin/pkg-config"] + new_options + ["--", package]).decode('ascii').strip().split(' ')
 
     for token in tokens:
         if token.startswith("-L"):
